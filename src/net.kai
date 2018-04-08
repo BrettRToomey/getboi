@@ -1,0 +1,93 @@
+#import "curl.kai"
+#import "libc.kai"
+
+Constants :: enum {
+    MAX_REDIRS :: 15
+}
+
+Method :: enum {
+    Get
+    Post
+    Delete
+    Put
+    Patch
+}
+
+MethodToString :: fn(m: Method) -> string {
+    switch using m {
+    case Get:    return "GET"
+    case Post:   return "POST"
+    case Delete: return "DELETE"
+    case Put:    return "PUT"
+    case Patch:  return "PATCH"
+    case: return "GET" // just default to GET
+    }
+}
+
+InitCurl :: fn() -> curl.CURL {
+    curl.global_init(curl.GLOBAL_ALL)
+    return curl.easy_init()
+}
+
+OK :: fn(code: curl.Code) -> bool {
+    return code == curl.Code.OK
+}
+
+ErrorToString :: fn(code: curl.Code) -> string {
+    message: string
+    message.raw = curl.easy_strerror(code)
+    message.len = cast(u64) libc.strlen(message.raw)
+    message.cap = 0
+    return message
+}
+
+Min :: fn(a,b: $T) -> T {
+    return a < b ? a : b
+}
+
+MakeRequest :: fn(hnd: curl.CURL, method: Method, path: string, data: *[]u8) -> void {
+    using curl, Option
+    easy_reset(hnd)
+    easy_setopt(hnd, URL, path.raw)
+    easy_setopt(hnd, CUSTOMREQUEST, MethodToString(method).raw)
+    easy_setopt(hnd, FOLLOWLOCATION, true)
+    easy_setopt(hnd, MAXREDIRS, Constants.MAX_REDIRS)
+    easy_setopt(hnd, WRITEFUNCTION, &curlWriteFunc)
+    easy_setopt(hnd, WRITEDATA, data)
+}
+
+MakeRequestFormEncoded :: fn(hnd: curl.CURL, method: Method, path: string, fields: string, data: *[]u8) -> void {
+    MakeRequest(hnd, method, path, data)
+    using curl
+    easy_setopt(hnd, Option.POSTFIELDS, fields.raw)
+}
+
+Send :: fn(hnd: curl.CURL) -> curl.Code, i64, f64 {
+    ret := curl.easy_perform(hnd)
+
+    status: i64
+    curl.easy_getinfo(hnd, curl.Info.RESPONSE_CODE, &status)
+
+    time: f64
+    curl.easy_getinfo(hnd, curl.Info.TOTAL_TIME, &time)
+
+    return ret, status, time
+}
+
+curlWriteFunc :: fn(ptr: rawptr, size, nmemb: i64, userdata: *[]u8) -> u64 {
+    if userdata {
+        len := size*nmemb
+        written := Min(cast(u64)len, userdata.cap - userdata.len)
+        libc.memcpy(&userdata.raw[userdata.len], ptr, written)
+        userdata.len += written
+        return written
+    }
+
+    return 0
+}
+
+curlReadFunc :: fn(ptr: rawptr, size, nmemb: i64, userdata: rawptr) -> i64 {
+    return 0
+}
+
+

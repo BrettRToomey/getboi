@@ -1,0 +1,232 @@
+#library "libcurl"
+
+CURL :: rawptr
+
+#foreign libcurl #callconv "c" #linkprefix "curl_" {
+    global_init  :: (flags: u64) -> Code
+    easy_init    :: () -> CURL
+    easy_setopt  :: (handle: CURL, opt: Option, param: #cvargs ..any) -> Code
+    easy_getinfo :: (handle: CURL, info: Info, param: #cvargs ..any) -> Code
+    easy_perform :: (handle: CURL) -> Code
+    easy_reset   :: (handle: CURL) -> void
+    easy_cleanup :: (handle: CURL) -> void
+
+    easy_strerror :: (code: Code) -> *u8
+}
+
+ERROR_SIZE :: 0x100
+
+GLOBAL_NOTHING :: 0
+GLOBAL_SSL     :: 1 << 0
+GLOBAL_WIN32   :: 1 << 1
+GLOBAL_ALL     :: GLOBAL_SSL | GLOBAL_WIN32
+GLOBAL_DEFAULT :: GLOBAL_ALL
+
+Option :: enum(u32) {
+    NOPROGRESS     :: 0x2b
+    FOLLOWLOCATION :: 0x34
+    MAXREDIRS      :: 0x44
+    TCP_KEEPALIVE  :: 0xd5
+
+    WRITEDATA   :: 0x2711
+    URL         :: 0x2712
+    ERRORBUFFER ::0x271a
+    POSTFIELDS  :: 0x271f
+    USERAGENT   :: 0x2722
+    HTTPHEADER  :: 0x2727
+    CUSTOMREQUEST  :: 0x2734
+    SSH_KNOWNHOSTS :: 0x27c7
+
+    WRITEFUNCTION :: 0x4e2b
+}
+
+InfoType :: enum(u32) {
+    STRING   :: 0x100000
+    LONG     :: 0x200000
+    DOUBLE   :: 0x300000
+    SLIST    :: 0x400000
+    SOCKET   :: 0x500000
+    MASK     :: 0x0fffff
+    TYPEMASK :: 0xf00000
+}
+
+Info :: enum(u32) {
+    NONE
+    EFFECTIVE_URL    :: InfoType.STRING + 1
+    RESPONSE_CODE    :: InfoType.LONG   + 2
+    TOTAL_TIME       :: InfoType.DOUBLE + 3
+    NAMELOOKUP_TIME  :: InfoType.DOUBLE + 4
+    CONNECT_TIME     :: InfoType.DOUBLE + 5
+    PRETRANSFER_TIME :: InfoType.DOUBLE + 6
+    SIZE_UPLOAD      :: InfoType.DOUBLE + 7
+    SIZE_DOWNLOAD    :: InfoType.DOUBLE + 8
+    SPEED_DOWNLOAD   :: InfoType.DOUBLE + 9
+    SPEED_UPLOAD     :: InfoType.DOUBLE + 10
+    HEADER_SIZE      :: InfoType.LONG   + 11
+    REQUEST_SIZE     :: InfoType.LONG   + 12
+    SSL_VERIFYRESULT :: InfoType.LONG   + 13
+    FILETIME         :: InfoType.LONG   + 14
+    CONTENT_LENGTH_DOWNLOAD   :: InfoType.DOUBLE + 15
+    CONTENT_LENGTH_UPLOAD     :: InfoType.DOUBLE + 16
+    STARTTRANSFER_TIME :: InfoType.DOUBLE + 17
+    CONTENT_TYPE     :: InfoType.STRING + 18
+    REDIRECT_TIME    :: InfoType.DOUBLE + 19
+    REDIRECT_COUNT   :: InfoType.LONG   + 20
+    PRIVATE          :: InfoType.STRING + 21
+    HTTP_CONNECTCODE :: InfoType.LONG   + 22
+    HTTPAUTH_AVAIL   :: InfoType.LONG   + 23
+    PROXYAUTH_AVAIL  :: InfoType.LONG   + 24
+    OS_ERRNO         :: InfoType.LONG   + 25
+    NUM_CONNECTS     :: InfoType.LONG   + 26
+    SSL_ENGINES      :: InfoType.SLIST  + 27
+    COOKIELIST       :: InfoType.SLIST  + 28
+    LASTSOCKET       :: InfoType.LONG   + 29
+    FTP_ENTRY_PATH   :: InfoType.STRING + 30
+    REDIRECT_URL     :: InfoType.STRING + 31
+    PRIMARY_IP       :: InfoType.STRING + 32
+    APPCONNECT_TIME  :: InfoType.DOUBLE + 33
+    CERTINFO         :: InfoType.SLIST  + 34
+    CONDITION_UNMET  :: InfoType.LONG   + 35
+    RTSP_SESSION_ID  :: InfoType.STRING + 36
+    RTSP_CLIENT_CSEQ :: InfoType.LONG   + 37
+    RTSP_SERVER_CSEQ :: InfoType.LONG   + 38
+    RTSP_CSEQ_RECV   :: InfoType.LONG   + 39
+    PRIMARY_PORT     :: InfoType.LONG   + 40
+    LOCAL_IP         :: InfoType.STRING + 41
+    LOCAL_PORT       :: InfoType.LONG   + 42
+    TLS_SESSION      :: InfoType.SLIST  + 43
+    ACTIVESOCKET     :: InfoType.SOCKET + 44
+    TLS_SSL_PTR      :: InfoType.SLIST  + 45
+    HTTP_VERSION     :: InfoType.LONG   + 46
+}
+
+Code :: enum(u32) {
+  OK :: 0
+  UNSUPPORTED_PROTOCOL    /* 1 */
+  FAILED_INIT             /* 2 */
+  URL_MALFORMAT           /* 3 */
+  NOT_BUILT_IN            /* 4 - [was obsoleted in August 2007 for
+                                    7.17.0 reused in April 2011 for 7.21.5] */
+  COULDNT_RESOLVE_PROXY   /* 5 */
+  COULDNT_RESOLVE_HOST    /* 6 */
+  COULDNT_CONNECT         /* 7 */
+  WEIRD_SERVER_REPLY      /* 8 */
+  REMOTE_ACCESS_DENIED    /* 9 a service was denied by the server
+                                    due to lack of access - when login fails
+                                    this is not returned. */
+  FTP_ACCEPT_FAILED       /* 10 - [was obsoleted in April 2006 for
+                                    7.15.4 reused in Dec 2011 for 7.24.0]*/
+  FTP_WEIRD_PASS_REPLY    /* 11 */
+  FTP_ACCEPT_TIMEOUT      /* 12 - timeout occurred accepting server
+                                    [was obsoleted in August 2007 for 7.17.0
+                                    reused in Dec 2011 for 7.24.0]*/
+  FTP_WEIRD_PASV_REPLY    /* 13 */
+  FTP_WEIRD_227_FORMAT    /* 14 */
+  FTP_CANT_GET_HOST       /* 15 */
+  HTTP2                   /* 16 - A problem in the http2 framing layer.
+                                    [was obsoleted in August 2007 for 7.17.0
+                                    reused in July 2014 for 7.38.0] */
+  FTP_COULDNT_SET_TYPE    /* 17 */
+  PARTIAL_FILE            /* 18 */
+  FTP_COULDNT_RETR_FILE   /* 19 */
+  OBSOLETE20              /* 20 - NOT USED */
+  QUOTE_ERROR             /* 21 - quote command failure */
+  HTTP_RETURNED_ERROR     /* 22 */
+  WRITE_ERROR             /* 23 */
+  OBSOLETE24              /* 24 - NOT USED */
+  UPLOAD_FAILED           /* 25 - failed upload "command" */
+  READ_ERROR              /* 26 - couldn't open/read from file */
+  OUT_OF_MEMORY           /* 27 */
+  /* Note: OUT_OF_MEMORY may sometimes indicate a conversion error
+           instead of a memory allocation error if CURL_DOES_CONVERSIONS
+           is defined
+  */
+  OPERATION_TIMEDOUT      /* 28 - the timeout time was reached */
+  OBSOLETE29              /* 29 - NOT USED */
+  FTP_PORT_FAILED         /* 30 - FTP PORT operation failed */
+  FTP_COULDNT_USE_REST    /* 31 - the REST command failed */
+  OBSOLETE32              /* 32 - NOT USED */
+  RANGE_ERROR             /* 33 - RANGE "command" didn't work */
+  HTTP_POST_ERROR         /* 34 */
+  SSL_CONNECT_ERROR       /* 35 - wrong when connecting with SSL */
+  BAD_DOWNLOAD_RESUME     /* 36 - couldn't resume download */
+  FILE_COULDNT_READ_FILE  /* 37 */
+  LDAP_CANNOT_BIND        /* 38 */
+  LDAP_SEARCH_FAILED      /* 39 */
+  OBSOLETE40              /* 40 - NOT USED */
+  FUNCTION_NOT_FOUND      /* 41 - NOT USED starting with 7.53.0 */
+  ABORTED_BY_CALLBACK     /* 42 */
+  BAD_FUNCTION_ARGUMENT   /* 43 */
+  OBSOLETE44              /* 44 - NOT USED */
+  INTERFACE_FAILED        /* 45 - CURLOPT_INTERFACE failed */
+  OBSOLETE46              /* 46 - NOT USED */
+  TOO_MANY_REDIRECTS      /* 47 - catch endless re-direct loops */
+  UNKNOWN_OPTION          /* 48 - User specified an unknown option */
+  TELNET_OPTION_SYNTAX    /* 49 - Malformed telnet option */
+  OBSOLETE50              /* 50 - NOT USED */
+  PEER_FAILED_VERIFICATION /* 51 - peer's certificate or fingerprint
+                                     wasn't verified fine */
+  GOT_NOTHING             /* 52 - when this is a specific error */
+  SSL_ENGINE_NOTFOUND     /* 53 - SSL crypto engine not found */
+  SSL_ENGINE_SETFAILED    /* 54 - can not set SSL crypto engine as
+                                    default */
+  SEND_ERROR              /* 55 - failed sending network data */
+  RECV_ERROR              /* 56 - failure in receiving network data */
+  OBSOLETE57              /* 57 - NOT IN USE */
+  SSL_CERTPROBLEM         /* 58 - problem with the local certificate */
+  SSL_CIPHER              /* 59 - couldn't use specified cipher */
+  SSL_CACERT              /* 60 - problem with the CA cert (path?) */
+  BAD_CONTENT_ENCODING    /* 61 - Unrecognized/bad encoding */
+  LDAP_INVALID_URL        /* 62 - Invalid LDAP URL */
+  FILESIZE_EXCEEDED       /* 63 - Maximum file size exceeded */
+  USE_SSL_FAILED          /* 64 - Requested FTP SSL level failed */
+  SEND_FAIL_REWIND        /* 65 - Sending the data requires a rewind
+                                    that failed */
+  SSL_ENGINE_INITFAILED   /* 66 - failed to initialise ENGINE */
+  LOGIN_DENIED            /* 67 - user password or similar was not
+                                    accepted and we failed to login */
+  TFTP_NOTFOUND           /* 68 - file not found on server */
+  TFTP_PERM               /* 69 - permission problem on server */
+  REMOTE_DISK_FULL        /* 70 - out of disk space on server */
+  TFTP_ILLEGAL            /* 71 - Illegal TFTP operation */
+  TFTP_UNKNOWNID          /* 72 - Unknown transfer ID */
+  REMOTE_FILE_EXISTS      /* 73 - File already exists */
+  TFTP_NOSUCHUSER         /* 74 - No such user */
+  CONV_FAILED             /* 75 - conversion failed */
+  CONV_REQD               /* 76 - caller must register conversion
+                                    callbacks using curl_easy_setopt options
+                                    CURLOPT_CONV_FROM_NETWORK_FUNCTION
+                                    CURLOPT_CONV_TO_NETWORK_FUNCTION and
+                                    CURLOPT_CONV_FROM_UTF8_FUNCTION */
+  SSL_CACERT_BADFILE      /* 77 - could not load CACERT file missing
+                                    or wrong format */
+  REMOTE_FILE_NOT_FOUND   /* 78 - remote file not found */
+  SSH                     /* 79 - error from the SSH layer somewhat
+                                    generic so the error message will be of
+                                    interest when this has happened */
+
+  SSL_SHUTDOWN_FAILED     /* 80 - Failed to shut down the SSL
+                                    connection */
+  AGAIN                   /* 81 - socket is not ready for send/recv
+                                    wait till it's ready and try again (Added
+                                    in 7.18.2) */
+  SSL_CRL_BADFILE         /* 82 - could not load CRL file missing or
+                                    wrong format (Added in 7.19.0) */
+  SSL_ISSUER_ERROR        /* 83 - Issuer check failed.  (Added in
+                                    7.19.0) */
+  FTP_PRET_FAILED         /* 84 - a PRET command failed */
+  RTSP_CSEQ_ERROR         /* 85 - mismatch of RTSP CSeq numbers */
+  RTSP_SESSION_ERROR      /* 86 - mismatch of RTSP Session Ids */
+  FTP_BAD_FILE_LIST       /* 87 - unable to parse FTP file list */
+  CHUNK_FAILED            /* 88 - chunk callback reported error */
+  NO_CONNECTION_AVAILABLE /* 89 - No connection available the
+                                    session will be queued */
+  SSL_PINNEDPUBKEYNOTMATCH /* 90 - specified pinned public key did not
+                                     match */
+  SSL_INVALIDCERTSTATUS   /* 91 - invalid certificate status */
+  HTTP2_STREAM            /* 92 - stream error in HTTP/2 framing layer
+                                    */
+  RECURSIVE_API_CALL      /* 93 - an api function was called from
+                                    inside a callback */
+  CURL_LAST /* never use! */
+}

@@ -1,0 +1,113 @@
+#import "libc.kai"
+
+AllocType :: enum {
+    Alloc
+    Free
+    FreeAll
+    Realloc
+}
+
+AllocFunc :: *(payload: rawptr, type: AllocType, size, oldsize: u64, old: rawptr) -> rawptr
+
+Allocator :: struct {
+    func: AllocFunc
+    payload: rawptr
+}
+
+// A 'malloc'-based allocator.
+DefaultAllocatorInit :: fn() -> Allocator {
+    return Allocator {
+        &heapAllocFunc,
+        nil
+    }
+}
+
+heapAllocFunc :: fn(payload: rawptr, type: AllocType, size, oldsize: u64, old: rawptr) -> rawptr {
+    using AllocType
+    switch type {
+    case Alloc:
+        return libc.malloc(size)
+    case Free:
+        libc.free(old)
+        return nil
+    case FreeAll: 
+        break
+    case Realloc:
+        return libc.realloc(old, size)
+    }
+
+    return nil
+}
+
+// Maps a file to an address through the kernel.
+ReadFile :: fn(path: string) -> []u8, bool {
+    using libc
+    file := open(path.raw, O_RDONLY)
+    if file == -1 { return []u8{}, false }
+    defer close(file)
+    
+    stat: Stat
+    if fstat(file, &stat) < 0
+        return []u8{}, false
+
+    len := stat.size
+    addr := mmap(nil, len, PROT_READ, MAP_PRIVATE, file, 0)
+    if cast(i64)addr < 0
+        return []u8{}, false
+
+    result: []u8
+    result.raw = autocast addr
+    result.len = len
+    result.cap = 0
+    return result, true
+}
+
+WriteFile :: fn(path: string, bytes: []u8) -> bool {
+    using libc
+    file := fopen(path.raw, "w".raw)
+    if !file
+        return false
+
+    defer fclose(file)
+
+    written := fwrite(bytes.raw, 1, bytes.len, file)
+    if written != bytes.len
+        return false
+
+    return true
+}
+
+// Allocates 'size' bytes and returns a raw pointer.
+Alloc :: fn(a: Allocator, size: u64) -> rawptr {
+    return a.func(a.payload, AllocType.Alloc, size, 0, nil)
+}
+
+// Frees up previously allocated memory.
+Free :: fn(a: Allocator, ptr: rawptr) -> void {
+    if ptr == nil return
+    a.func(a.payload, AllocType.Free, 0, 0, ptr)
+}
+
+// Free up all items allocated by an 'Allocator'.
+FreeAll :: fn(a: Allocator) -> void {
+    a.func(a.payload, AllocType.FreeAll, 0, 0, nil)
+}
+
+// Reallocate memory.
+Realloc :: fn(a: Allocator, ptr: rawptr, oldsize, size: u64) -> rawptr {
+    return a.func(a.payload, AllocType.Realloc, size, oldsize, ptr)
+}
+
+ArrayInit :: fn(a: Allocator, array: *[]$T, cap: u64) -> void {
+    array.raw = cast(*T)Alloc(a, sizeof(T) * cap)
+    array.len = 0
+    array.cap = cap
+}
+
+MakeArray :: fn(raw: *$T, len, cap: u64) -> []T {
+    array: []T
+    array.raw = raw
+    array.len = len
+    array.cap = cap
+    return array
+}

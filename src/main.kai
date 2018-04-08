@@ -1,0 +1,219 @@
+#import "net.kai"
+#import "mem.kai"
+#import "curses.kai"
+
+ComponentColor :: enum(u16) {
+    Default :: 1
+    Get
+    Tabbar
+    Tab
+    LineNum
+}
+
+Color :: enum {
+    Black    :: 0
+    Red      :: 1
+    Green    :: 2
+    Yellow   :: 3
+    Blue     :: 4
+    Magenta  :: 5
+    Cyan     :: 6
+    White    :: 7
+    DarkGrey :: 8
+    Reverse  :: 255
+}
+
+Mode :: enum {
+    Normal
+    UrlInput
+    Search
+    Collections
+    Endpoints
+}
+
+TabbarWidth  :: 0
+TabbarHeight :: 1
+
+HeaderWidth  :: 0
+HeaderHeight :: 3
+HeaderOffset :: TabbarHeight
+
+MethodWidth  :: 5
+MethodHeight :: 1
+
+URL :: "https://jsonplaceholder.typicode.com/users"
+
+EnableComponentColor :: fn(win: rawptr, color: ComponentColor) -> void {
+    using curses
+    colorPair := COLOR_PAIR(color)
+    wattron(win, colorPair)
+}
+
+DisableComponentColor :: fn(win: rawptr, color: ComponentColor) -> void {
+    using curses
+    colorPair := COLOR_PAIR(color)
+    wattroff(win, colorPair)
+}
+
+FillLine :: fn(win: rawptr, color: ComponentColor, width: i32) -> void {
+    EnableComponentColor(win, color)
+    for i := 0; i < width; i += 1 {
+        curses.mvwprintw(win, 0, i, " ".raw)
+    }
+    DisableComponentColor(win, color)
+}
+
+FillLineOffset :: fn(win: rawptr, color: ComponentColor, width, offset: i32) -> void {
+    EnableComponentColor(win, color)
+    for i := 0; i < width; i += 1 {
+        curses.mvwprintw(win, 0, i+offset, " ".raw)
+    }
+    DisableComponentColor(win, color)
+}
+
+Header :: struct {
+    container,
+    methodType,
+    url: rawptr
+}
+
+SetupHeader :: fn(maxWidth: i32) -> Header {
+    header: Header
+    using curses
+    return header
+}
+
+RefreshHeader :: fn(header: Header) -> void {
+    curses.touchwin(header.container)
+    curses.wrefresh(header.methodType)
+    curses.wrefresh(header.container)
+}
+
+main :: fn() -> i32 {
+    hnd := net.InitCurl()
+    if !hnd {
+        return 1
+    }
+
+    buffSize :: 1024 * 1024 * 4
+
+    data: []u8
+    mem.ArrayInit(mem.DefaultAllocatorInit(), &data, buffSize)
+
+    curses.initscr()
+    curses.noecho()
+    curses.cbreak()
+
+    hasComponentColor := curses.has_colors() != curses.FALSE
+    if !hasComponentColor {
+        return 1
+    }
+
+    curses.use_default_colors()
+    curses.start_color()
+    curses.init_pair(ComponentColor.Get,     Color.White, Color.Green)
+    curses.init_pair(ComponentColor.Tabbar,  Color.White, Color.DarkGrey)
+    curses.init_pair(ComponentColor.Tab,     Color.Black, Color.Cyan)
+    curses.init_pair(ComponentColor.LineNum, Color.DarkGrey, -1)
+
+    h, w := curses.getmaxyx(curses.stdscr)
+
+    win := curses.newwin(0, 0, 0, 0)
+    curses.keypad(win, curses.TRUE)
+
+    tabbar := curses.subwin(win, TabbarHeight, TabbarWidth, 0, 0)
+    header := curses.subwin(win, HeaderHeight, HeaderWidth, HeaderOffset, 0)
+    sub := curses.derwin(header, 1, 9, 1, 1)
+    url := curses.derwin(header, 1, w-10, 1, 10)
+    
+    toggle := curses.subwin(win, 1, 0, HeaderOffset+HeaderHeight, 0)
+    content := curses.derwin(win, h-6, 0, 5, 3)
+
+    curses.scrollok(content, curses.TRUE)
+    
+    curses.box(header, 0, 0)
+
+    FillLine(tabbar, ComponentColor.Tabbar, w)
+    FillLine(toggle, ComponentColor.Tabbar, w/2)
+    // NOTE: the plus one is to properly size on odd screen widths
+    FillLineOffset(toggle, ComponentColor.Tab, w/2+1, w/2)
+
+    EnableComponentColor(tabbar, ComponentColor.Tab)
+    curses.mvwprintw(tabbar, 0, 0, " An example request + ".raw)
+    DisableComponentColor(tabbar, ComponentColor.Tab)
+
+    EnableComponentColor(sub, ComponentColor.Get)
+    curses.mvwprintw(sub, 0, 0, "   GET   ".raw)
+    DisableComponentColor(sub, ComponentColor.Get)
+
+    curses.wprintw(url, " %s".raw, URL.raw)
+
+    EnableComponentColor(toggle, ComponentColor.Tabbar)
+    curses.mvwprintw(toggle, 0, 1, "Request".raw)
+    DisableComponentColor(toggle, ComponentColor.Tab)
+
+    EnableComponentColor(toggle, ComponentColor.Tab)
+    curses.mvwprintw(toggle, 0, (w/2)+1, "Response".raw)
+    DisableComponentColor(toggle, ComponentColor.Tab)
+
+    EnableComponentColor(win, ComponentColor.LineNum)
+    for i := 0; i < (h-6); i += 1 {
+        curses.mvwprintw(win, i+5, 0, "%*d".raw, 2, i+1)
+    }
+    DisableComponentColor(win, ComponentColor.LineNum)
+
+    curses.curs_set(curses.FALSE)
+
+    running := true
+    for running {
+        ch := curses.wgetch(win)
+        switch ch {
+        case "q":
+            running = false
+        case curses.KEY_ENTER:
+            data.len = 0
+            net.MakeRequest(hnd, net.Method.Get, URL, &data)
+            code, status, time := net.Send(hnd)
+            if net.OK(code) {
+                curses.curs_set(curses.TRUE)
+                curses.wmove(win, 5, 3)
+                curses.wprintw(content, "%.*s\n".raw, data.len, data.raw)
+            } else {
+                curses.wprintw(content, "%s\n".raw, net.ErrorToString(code).raw)
+            }
+
+            EnableComponentColor(toggle, ComponentColor.Tab)
+            curses.mvwprintw(toggle, 0, (w/2)+10, "(json, %dms, status: %d)".raw, cast(i32)(time*1000), status)
+            DisableComponentColor(toggle, ComponentColor.Tab)
+
+            curses.touchwin(win)
+            curses.wrefresh(content)
+            curses.wrefresh(toggle)
+        case curses.KEY_UP:
+            curses.wscrl(content, -1) 
+            curses.touchwin(win)
+            curses.wrefresh(content)
+        case curses.KEY_DOWN:
+            curses.wscrl(content, 1)
+            curses.touchwin(win)
+            curses.wrefresh(content)
+        case "e":
+            curses.wprintw(content, "Test\n".raw)
+            curses.wrefresh(content)
+        case "f":
+            ok := mem.WriteFile(".getboirc", "Hello, world!\n")
+            if !ok {
+                curses.wprintw(content, "Oops!\n".raw)
+                curses.wrefresh(content)
+            } else {
+                curses.wprintw(content, "Done! %d\n".raw, data.len)
+                curses.wrefresh(content)
+            }
+        }
+    }
+    
+    curses.endwin()
+    return 0
+}
+
+

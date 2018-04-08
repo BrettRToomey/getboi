@@ -1,0 +1,114 @@
+#library "libncurses"
+#foreign ncurses #callconv "c" {
+    initscr  :: () -> rawptr
+    endwin   :: () -> i32
+    cbreak   :: () -> i32
+    raw      :: () -> i32
+    refresh  :: () -> i32
+    clear    :: () -> i32
+    clrtoeol :: () -> i32
+    noecho   :: () -> i32
+
+    has_colors  :: () -> i32
+    start_color :: () -> i32
+    init_pair   :: (id, a, b: i16) -> i32
+    COLOR_PAIR  :: (id: i32) -> i32
+    wbkgd       :: (win: rawptr, ch: i32) -> i32
+    use_default_colors :: () -> i32
+
+    getmaxx :: (win: rawptr) -> i32
+    getmaxy :: (win: rawptr) -> i32
+
+    wborder  :: (win: rawptr, ls, rs, ts, bs, tl, tr, bl, br: i32) -> i32
+    box      :: (win: rawptr, w, h: u32) -> i32
+    newwin   :: (h, w, y, x: i32) -> rawptr
+    subwin   :: (orig: rawptr, h, w, y, x: i32) -> rawptr
+    derwin   :: (orig: rawptr, h, w, y, x: i32) -> rawptr
+    printw   :: (format: *u8, args: #cvargs ..any) -> i32
+    wprintw  :: (win: rawptr, format: *u8, args: #cvargs ..any) -> i32
+    mvprintw :: (y, x: i32, fmt: *u8, args: #cvargs ..any) -> i32
+    mvwprintw :: (win: rawptr, y, x: i32, fmt: *u8, args: #cvargs ..any) -> i32
+    keypad   :: (win: rawptr, cond: i32) -> i32
+    getch    :: () -> u32
+    wgetch   :: (win: rawptr) -> i32
+    wrefresh :: (win: rawptr) -> i32
+    wattron  :: (win: rawptr, attr: i32) -> i32
+    wattroff :: (win: rawptr, attr: i32) -> i32
+    nodelay  :: (win: rawptr, cond: i32) -> i32
+    scrollok :: (win: rawptr, cond: i32) -> i32
+    curs_set :: (val: i32) -> i32
+    wvline   :: (win: rawptr, ch, n: u32) -> i32
+
+    wclear    :: (win: rawptr) -> i32
+    wclrtoeol :: (win: rawptr) -> i32
+    wmove     :: (win: rawptr, y, x: u32) -> i32
+    touchwin  :: (win: rawptr) -> i32
+
+    mousemask :: (new: u32, old: *u32) -> i32
+    getmouse  :: (event: *MEVENT) -> i32
+
+    wscrl :: (win: rawptr, n: i32) -> i32
+
+    wchgat :: (win: rawptr, n: i32, attr: i32, color: u16, opts: rawptr) -> i32
+
+    stdscr : rawptr
+    COLORS : i32
+}
+
+getmaxyx :: fn(win: rawptr) -> i32, i32 {
+    y, x := getmaxy(win), getmaxx(win)
+    return y, x
+}
+
+MEVENT :: struct {
+    id: u16
+    x, y, z: u32
+    bstate: u32
+}
+
+ERR   :: 0xFFFFFFFF
+OK    :: 0
+TRUE  :: 1
+FALSE :: 0
+
+KEY_DOWN   :: 0x102
+KEY_UP     :: 0x103
+KEY_ENTER  :: 0x00A
+KEY_MOUSE  :: 0x199
+KEY_QUIT   :: 0x011
+KEY_TAB    :: 0x009
+KEY_STAB   :: 0x161
+KEY_RESIZE :: 0x19a
+
+BUTTON1_RELEASED :: 0x01
+BUTTON1_PRESSED  :: 0x02
+BUTTON1_CLICKED  :: 0x04
+
+COLOR_BLACK   :: 0
+COLOR_RED     :: 1
+COLOR_GREEN   :: 2
+COLOR_YELLOW  :: 3
+COLOR_BLUE    :: 4
+COLOR_MAGENTA :: 5
+COLOR_CYAN    :: 6
+COLOR_WHITE   :: 7
+
+A_NORMAL     :: 0x0
+A_ATTRIBUTES :: 0xffffffffffffff00
+A_CHARTEXT   :: 0xff
+A_COLOR      :: 0xff00
+A_STANDOUT   :: 0x10000
+A_UNDERLINE  :: 0x20000
+A_REVERSE    :: 0x40000
+A_BLINK      :: 0x80000
+A_DIM        :: 0x100000
+A_BOLD       :: 0x200000
+A_ALTCHARSET :: 0x400000
+A_INVIS      :: 0x800000
+A_PROTECT    :: 0x1000000
+A_HORIZONTAL :: 0x2000000
+A_LEFT       :: 0x4000000
+A_LOW        :: 0x8000000
+A_RIGHT      :: 0x10000000
+A_TOP        :: 0x20000000
+A_VERTICAL   :: 0x40000000
