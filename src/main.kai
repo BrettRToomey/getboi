@@ -100,38 +100,40 @@ main :: fn() -> i32 {
     data: []u8
     mem.ArrayInit(mem.DefaultAllocatorInit(), &data, buffSize)
 
-    curses.initscr()
-    curses.noecho()
-    curses.cbreak()
+    using curses
 
-    hasComponentColor := curses.has_colors() != curses.FALSE
+    initscr()
+    noecho()
+    cbreak()
+
+    hasComponentColor := has_colors() != FALSE
     if !hasComponentColor {
         return 1
     }
 
-    curses.use_default_colors()
-    curses.start_color()
-    curses.init_pair(ComponentColor.Get,     Color.White, Color.Green)
-    curses.init_pair(ComponentColor.Tabbar,  Color.White, Color.DarkGrey)
-    curses.init_pair(ComponentColor.Tab,     Color.Black, Color.Cyan)
-    curses.init_pair(ComponentColor.LineNum, Color.DarkGrey, -1)
+    use_default_colors()
+    start_color()
+    init_pair(ComponentColor.Get,     Color.White, Color.Green)
+    init_pair(ComponentColor.Tabbar,  Color.White, Color.DarkGrey)
+    init_pair(ComponentColor.Tab,     Color.Black, Color.Cyan)
+    init_pair(ComponentColor.LineNum, Color.DarkGrey, -1)
 
-    h, w := curses.getmaxyx(curses.stdscr)
+    h, w := getmaxyx(stdscr)
 
-    win := curses.newwin(0, 0, 0, 0)
-    curses.keypad(win, curses.TRUE)
+    win := newwin(0, 0, 0, 0)
+    keypad(win, TRUE)
 
-    tabbar := curses.subwin(win, TabbarHeight, TabbarWidth, 0, 0)
-    header := curses.subwin(win, HeaderHeight, HeaderWidth, HeaderOffset, 0)
-    sub := curses.derwin(header, 1, 9, 1, 1)
-    url := curses.derwin(header, 1, w-10, 1, 10)
+    tabbar := subwin(win, TabbarHeight, TabbarWidth, 0, 0)
+    header := subwin(win, HeaderHeight, HeaderWidth, HeaderOffset, 0)
+    sub := derwin(header, 1, 9, 1, 1)
+    url := derwin(header, 1, w-10, 1, 10)
     
-    toggle := curses.subwin(win, 1, 0, HeaderOffset+HeaderHeight, 0)
-    content := curses.derwin(win, h-6, 0, 5, 3)
+    toggle := subwin(win, 1, 0, HeaderOffset+HeaderHeight, 0)
+    content := derwin(win, h-6, 0, 5, 3)
 
-    curses.scrollok(content, curses.TRUE)
+    scrollok(content, TRUE)
     
-    curses.box(header, 0, 0)
+    box(header, 0, 0)
 
     FillLine(tabbar, ComponentColor.Tabbar, w)
     FillLine(toggle, ComponentColor.Tabbar, w/2)
@@ -139,80 +141,80 @@ main :: fn() -> i32 {
     FillLineOffset(toggle, ComponentColor.Tab, w/2+1, w/2)
 
     EnableComponentColor(tabbar, ComponentColor.Tab)
-    curses.mvwprintw(tabbar, 0, 0, " An example request + ".raw)
+    mvwprintw(tabbar, 0, 0, " An example request + ".raw)
     DisableComponentColor(tabbar, ComponentColor.Tab)
 
     EnableComponentColor(sub, ComponentColor.Get)
-    curses.mvwprintw(sub, 0, 0, "   GET   ".raw)
+    mvwprintw(sub, 0, 0, "   GET   ".raw)
     DisableComponentColor(sub, ComponentColor.Get)
 
-    curses.wprintw(url, " %s".raw, URL.raw)
+    wprintw(url, " %s".raw, URL.raw)
 
     EnableComponentColor(toggle, ComponentColor.Tabbar)
-    curses.mvwprintw(toggle, 0, 1, "Request".raw)
+    mvwprintw(toggle, 0, 1, "Request".raw)
     DisableComponentColor(toggle, ComponentColor.Tab)
 
     EnableComponentColor(toggle, ComponentColor.Tab)
-    curses.mvwprintw(toggle, 0, (w/2)+1, "Response".raw)
+    mvwprintw(toggle, 0, (w/2)+1, "Response".raw)
     DisableComponentColor(toggle, ComponentColor.Tab)
 
     EnableComponentColor(win, ComponentColor.LineNum)
     for i := 0; i < (h-6); i += 1 {
-        curses.mvwprintw(win, i+5, 0, "%*d".raw, 2, i+1)
+        mvwprintw(win, i+5, 0, "%*d".raw, 2, i+1)
     }
     DisableComponentColor(win, ComponentColor.LineNum)
 
-    curses.curs_set(curses.FALSE)
+    curs_set(FALSE)
 
     running := true
     for running {
-        ch := curses.wgetch(win)
+        ch := wgetch(win)
         switch ch {
         case "q":
             running = false
-        case curses.KEY_ENTER:
+        case KEY_ENTER:
             data.len = 0
             net.MakeRequest(hnd, net.Method.Get, URL, &data)
             code, status, time := net.Send(hnd)
             if net.OK(code) {
-                curses.curs_set(curses.TRUE)
-                curses.wmove(win, 5, 3)
-                curses.wprintw(content, "%.*s\n".raw, data.len, data.raw)
+                curs_set(TRUE)
+                wmove(win, 5, 3)
+                wprintw(content, "%.*s\n".raw, data.len, data.raw)
             } else {
-                curses.wprintw(content, "%s\n".raw, net.ErrorToString(code).raw)
+                wprintw(content, "%s\n".raw, net.ErrorToString(code).raw)
             }
 
             EnableComponentColor(toggle, ComponentColor.Tab)
-            curses.mvwprintw(toggle, 0, (w/2)+10, "(json, %dms, status: %d)".raw, cast(i32)(time*1000), status)
+            mvwprintw(toggle, 0, (w/2)+10, "(json, %dms, status: %d)   ".raw, cast(i32)(time*1000), status)
             DisableComponentColor(toggle, ComponentColor.Tab)
 
-            curses.touchwin(win)
-            curses.wrefresh(content)
-            curses.wrefresh(toggle)
-        case curses.KEY_UP:
-            curses.wscrl(content, -1) 
-            curses.touchwin(win)
-            curses.wrefresh(content)
-        case curses.KEY_DOWN:
-            curses.wscrl(content, 1)
-            curses.touchwin(win)
-            curses.wrefresh(content)
+            touchwin(win)
+            wrefresh(content)
+            wrefresh(toggle)
+        case KEY_UP:
+            wscrl(content, -1) 
+            touchwin(win)
+            wrefresh(content)
+        case KEY_DOWN:
+            wscrl(content, 1)
+            touchwin(win)
+            wrefresh(content)
         case "e":
-            curses.wprintw(content, "Test\n".raw)
-            curses.wrefresh(content)
+            wprintw(content, "Test\n".raw)
+            wrefresh(content)
         case "f":
             ok := mem.WriteFile(".getboirc", "Hello, world!\n")
             if !ok {
-                curses.wprintw(content, "Oops!\n".raw)
-                curses.wrefresh(content)
+                wprintw(content, "Oops!\n".raw)
+                wrefresh(content)
             } else {
-                curses.wprintw(content, "Done! %d\n".raw, data.len)
-                curses.wrefresh(content)
+                wprintw(content, "Done! %d\n".raw, data.len)
+                wrefresh(content)
             }
         }
     }
     
-    curses.endwin()
+    endwin()
     return 0
 }
 
