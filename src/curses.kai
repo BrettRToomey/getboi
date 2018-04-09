@@ -62,8 +62,8 @@ getmaxyx :: fn(win: rawptr) -> i32, i32 {
 
 MEVENT :: struct {
     id: u16
-    x, y, z: u32
-    bstate: u32
+    x, y, z: i32
+    bstate: u64
 }
 
 ERR   :: 0xFFFFFFFF

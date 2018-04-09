@@ -57,18 +57,18 @@ DisableComponentColor :: fn(win: rawptr, color: ComponentColor) -> void {
 
 FillLine :: fn(win: rawptr, color: ComponentColor, width: i32) -> void {
     EnableComponentColor(win, color)
+    defer DisableComponentColor(win, color)
     for i := 0; i < width; i += 1 {
         curses.mvwprintw(win, 0, i, " ".raw)
     }
-    DisableComponentColor(win, color)
 }
 
 FillLineOffset :: fn(win: rawptr, color: ComponentColor, width, offset: i32) -> void {
     EnableComponentColor(win, color)
+    defer DisableComponentColor(win, color)
     for i := 0; i < width; i += 1 {
         curses.mvwprintw(win, 0, i+offset, " ".raw)
     }
-    DisableComponentColor(win, color)
 }
 
 State :: struct {
@@ -77,20 +77,36 @@ State :: struct {
     width: i32
     mode: Mode
     running: bool
-    win,
-    content,
-    toggle: rawptr
     responseData: *[]u8
 }
 
-TickNormalMode :: fn(state: *State) -> void {
+Input :: struct {
+    key: i32
+    mouseX,
+    mouseY: i32
+    mouseClicked: bool
+}
+
+Windows :: struct {
+    main,
+    body,
+    bodyToggle: rawptr
+}
+
+RelayoutWindows :: fn(windows: *Windows) -> void {
+
+}
+
+TickNormalMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
     using curses
-    ch := wgetch(state.win)
-    switch ch {
+    switch input.key {
     case "q":
         state.running = false
     case KEY_MOUSE:
-        state.running = false
+        if input.mouseClicked {
+            wprintw(windows.body, "%d, %d\n".raw, input.mouseX, input.mouseY)
+            wrefresh(windows.body)
+        }
     case KEY_ENTER:
         state.responseData.len = 0
         assert(state.responseData != nil)
@@ -98,19 +114,19 @@ TickNormalMode :: fn(state: *State) -> void {
         code, status, time := net.Send(state.hnd)
         if net.OK(code) {
             curs_set(TRUE)
-            wmove(state.win, 5, 3)
-            wprintw(state.content, "%.*s\n".raw, state.responseData.len, state.responseData.raw)
+            wmove(windows.main, 5, 3)
+            wprintw(windows.body, "%.*s\n".raw, state.responseData.len, state.responseData.raw)
         } else {
-            wprintw(state.content, "%s\n".raw, net.ErrorToString(code).raw)
+            wprintw(windows.body, "%s\n".raw, net.ErrorToString(code).raw)
         }
 
-        EnableComponentColor(state.toggle, ComponentColor.Tab)
-        mvwprintw(state.toggle, 0, (state.width/2)+10, "(json, %dms, status: %d)   ".raw, cast(i32)(time*1000), status)
-        DisableComponentColor(state.toggle, ComponentColor.Tab)
+        EnableComponentColor(windows.bodyToggle, ComponentColor.Tab)
+        mvwprintw(windows.bodyToggle, 0, (state.width/2)+10, "(json, %dms, status: %d)   ".raw, cast(i32)(time*1000), status)
+        DisableComponentColor(windows.bodyToggle, ComponentColor.Tab)
 
-        touchwin(state.win)
-        wrefresh(state.content)
-        wrefresh(state.toggle)
+        touchwin(windows.main)
+        wrefresh(windows.body)
+        wrefresh(windows.bodyToggle)
     }
 }
 
@@ -132,7 +148,8 @@ main :: fn() -> i32 {
     noecho()
     cbreak()
 
-    mousemask(BUTTON1_PRESSED, nil)
+    mouseFlags :: BUTTON1_PRESSED | BUTTON1_CLICKED
+    mousemask(mouseFlags, nil)
 
     hasComponentColor := has_colors() != FALSE
     if !hasComponentColor {
@@ -169,7 +186,7 @@ main :: fn() -> i32 {
     FillLineOffset(toggle, ComponentColor.Tab, w/2+1, w/2)
 
     EnableComponentColor(tabbar, ComponentColor.Tab)
-    mvwprintw(tabbar, 0, 0, " An example request + ".raw)
+    mvwprintw(tabbar, 0, 0, " An example request ".raw)
     DisableComponentColor(tabbar, ComponentColor.Tab)
 
     EnableComponentColor(sub, ComponentColor.Get)
@@ -200,16 +217,39 @@ main :: fn() -> i32 {
         height: h,
         mode: Mode.Normal,
         running: true,
-        win: win,
-        toggle: toggle,
-        content: content,
         responseData: &data
     }
     state := &_state
 
+    _windows := Windows {
+        main: win,
+        body: content,
+        bodyToggle: toggle
+    }
+    windows := &_windows
+
+    _input: Input
+    input := &_input
+
     for state.running {
+        key := curses.wgetch(win)
+        input.key = key
+        input.mouseClicked = false
+
+        if key == curses.KEY_MOUSE {
+            event: curses.MEVENT
+            if curses.getmouse(&event) == curses.OK {
+                input.mouseClicked = event.bstate & mouseFlags > 0
+                input.mouseX, input.mouseY = event.x, event.y
+            }
+        } else if key == curses.KEY_RESIZE {
+            state.height, state.width = getmaxyx(stdscr)
+            // TODO(Brett): relayout
+            continue
+        }
+
         switch using state.mode {
-        case Normal: TickNormalMode(state)
+        case Normal: TickNormalMode(state, windows, input)
         case: /* unhandled */ state.running = false
         }
     }
