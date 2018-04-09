@@ -71,22 +71,47 @@ FillLineOffset :: fn(win: rawptr, color: ComponentColor, width, offset: i32) -> 
     DisableComponentColor(win, color)
 }
 
-Header :: struct {
-    container,
-    methodType,
-    url: rawptr
+State :: struct {
+    hnd: rawptr
+    height,
+    width: i32
+    mode: Mode
+    running: bool
+    win,
+    content,
+    toggle: rawptr
+    responseData: *[]u8
 }
 
-SetupHeader :: fn(maxWidth: i32) -> Header {
-    header: Header
+TickNormalMode :: fn(state: *State) -> void {
     using curses
-    return header
-}
+    ch := wgetch(state.win)
+    switch ch {
+    case "q":
+        state.running = false
+    case KEY_MOUSE:
+        state.running = false
+    case KEY_ENTER:
+        state.responseData.len = 0
+        assert(state.responseData != nil)
+        net.MakeRequest(state.hnd, net.Method.Get, URL, state.responseData)
+        code, status, time := net.Send(state.hnd)
+        if net.OK(code) {
+            curs_set(TRUE)
+            wmove(state.win, 5, 3)
+            wprintw(state.content, "%.*s\n".raw, state.responseData.len, state.responseData.raw)
+        } else {
+            wprintw(state.content, "%s\n".raw, net.ErrorToString(code).raw)
+        }
 
-RefreshHeader :: fn(header: Header) -> void {
-    curses.touchwin(header.container)
-    curses.wrefresh(header.methodType)
-    curses.wrefresh(header.container)
+        EnableComponentColor(state.toggle, ComponentColor.Tab)
+        mvwprintw(state.toggle, 0, (state.width/2)+10, "(json, %dms, status: %d)   ".raw, cast(i32)(time*1000), status)
+        DisableComponentColor(state.toggle, ComponentColor.Tab)
+
+        touchwin(state.win)
+        wrefresh(state.content)
+        wrefresh(state.toggle)
+    }
 }
 
 main :: fn() -> i32 {
@@ -100,11 +125,14 @@ main :: fn() -> i32 {
     data: []u8
     mem.ArrayInit(mem.DefaultAllocatorInit(), &data, buffSize)
 
+    // TODO(Brett): remove UI code from here and this using stmt
     using curses
 
     initscr()
     noecho()
     cbreak()
+
+    mousemask(BUTTON1_PRESSED, nil)
 
     hasComponentColor := has_colors() != FALSE
     if !hasComponentColor {
@@ -166,56 +194,27 @@ main :: fn() -> i32 {
 
     curs_set(FALSE)
 
-    running := true
-    for running {
-        ch := wgetch(win)
-        switch ch {
-        case "q":
-            running = false
-        case KEY_ENTER:
-            data.len = 0
-            net.MakeRequest(hnd, net.Method.Get, URL, &data)
-            code, status, time := net.Send(hnd)
-            if net.OK(code) {
-                curs_set(TRUE)
-                wmove(win, 5, 3)
-                wprintw(content, "%.*s\n".raw, data.len, data.raw)
-            } else {
-                wprintw(content, "%s\n".raw, net.ErrorToString(code).raw)
-            }
+    _state := State { 
+        hnd: hnd,
+        width: w,
+        height: h,
+        mode: Mode.Normal,
+        running: true,
+        win: win,
+        toggle: toggle,
+        content: content,
+        responseData: &data
+    }
+    state := &_state
 
-            EnableComponentColor(toggle, ComponentColor.Tab)
-            mvwprintw(toggle, 0, (w/2)+10, "(json, %dms, status: %d)   ".raw, cast(i32)(time*1000), status)
-            DisableComponentColor(toggle, ComponentColor.Tab)
-
-            touchwin(win)
-            wrefresh(content)
-            wrefresh(toggle)
-        case KEY_UP:
-            wscrl(content, -1) 
-            touchwin(win)
-            wrefresh(content)
-        case KEY_DOWN:
-            wscrl(content, 1)
-            touchwin(win)
-            wrefresh(content)
-        case "e":
-            wprintw(content, "Test\n".raw)
-            wrefresh(content)
-        case "f":
-            ok := mem.WriteFile(".getboirc", "Hello, world!\n")
-            if !ok {
-                wprintw(content, "Oops!\n".raw)
-                wrefresh(content)
-            } else {
-                wprintw(content, "Done! %d\n".raw, data.len)
-                wrefresh(content)
-            }
+    for state.running {
+        switch using state.mode {
+        case Normal: TickNormalMode(state)
+        case: /* unhandled */ state.running = false
         }
     }
     
     endwin()
     return 0
 }
-
 

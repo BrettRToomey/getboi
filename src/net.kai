@@ -46,6 +46,7 @@ Min :: fn(a,b: $T) -> T {
 }
 
 MakeRequest :: fn(hnd: curl.CURL, method: Method, path: string, data: *[]u8) -> void {
+    assert(hnd != nil)
     using curl, Option
     easy_reset(hnd)
     easy_setopt(hnd, URL, path.raw)
@@ -63,6 +64,7 @@ MakeRequestFormEncoded :: fn(hnd: curl.CURL, method: Method, path: string, field
 }
 
 Send :: fn(hnd: curl.CURL) -> curl.Code, i64, f64 {
+    assert(hnd != nil)
     ret := curl.easy_perform(hnd)
 
     status: i64
