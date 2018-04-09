@@ -76,8 +76,16 @@ State :: struct {
     height,
     width: i32
     mode: Mode
-    running: bool
-    responseData: *[]u8
+    running,
+    hasResponse: bool
+    response: Response
+}
+
+Response :: struct {
+    data: *[]u8
+    contentType: string
+    time: f64
+    status: i64
 }
 
 Input :: struct {
@@ -89,12 +97,61 @@ Input :: struct {
 
 Windows :: struct {
     main,
+    header,
+    url,
+    tabbar,
     body,
     bodyToggle: rawptr
 }
 
-RelayoutWindows :: fn(windows: *Windows) -> void {
+RelayoutWindows :: fn(windows: *Windows, width, height: i32) -> void {
+    using curses
+    wresize(windows.main, height, width)
+    wresize(windows.header, HeaderHeight, width)
+    wresize(windows.url, 1, width-10)
+    wresize(windows.tabbar, TabbarHeight, width)
+    wresize(windows.body, height-6, width-3)
+    wresize(windows.bodyToggle, 1, width)
+}
 
+PrintUrl :: fn(windows: *Windows, url: string) -> void {
+    curses.mvwprintw(windows.url, 0, 1, "%s".raw, url.raw)
+}
+
+PrintResponseTab :: fn(windows: *Windows, state: *State) -> void {
+    FillLineOffset(windows.bodyToggle, ComponentColor.Tab, state.width/2+1, state.width/2)
+
+    EnableComponentColor(windows.bodyToggle, ComponentColor.Tab)
+    defer DisableComponentColor(windows.bodyToggle, ComponentColor.Tab)
+
+    if state.hasResponse {
+        contentType := state.response.contentType
+        time := cast(i32)(state.response.time*1000)
+        status := state.response.status
+
+        curses.mvwprintw(
+            windows.bodyToggle,
+            0, 
+            (state.width/2)+1, 
+            "Response (%s, %dms, status: %d)".raw,
+            contentType.raw, 
+            time,
+            status)
+    } else {
+        curses.mvwprintw(windows.bodyToggle, 0, (state.width/2)+1, "Response".raw)
+    }
+}
+
+RefreshAll :: fn(windows: *Windows) -> void {
+    using curses
+    touchwin(windows.main)
+    touchwin(windows.header)
+    wrefresh(windows.url)
+    wrefresh(windows.header)
+    wrefresh(windows.tabbar)
+    wrefresh(windows.bodyToggle)
+    wrefresh(windows.body)
+    wrefresh(windows.main)
 }
 
 TickNormalMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
@@ -108,21 +165,23 @@ TickNormalMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
             wrefresh(windows.body)
         }
     case KEY_ENTER:
-        state.responseData.len = 0
-        assert(state.responseData != nil)
-        net.MakeRequest(state.hnd, net.Method.Get, URL, state.responseData)
+        state.response.data.len = 0
+        assert(state.response.data != nil)
+        net.MakeRequest(state.hnd, net.Method.Get, URL, state.response.data)
         code, status, time := net.Send(state.hnd)
         if net.OK(code) {
             curs_set(TRUE)
             wmove(windows.main, 5, 3)
-            wprintw(windows.body, "%.*s\n".raw, state.responseData.len, state.responseData.raw)
+            wprintw(windows.body, "%.*s\n".raw, state.response.data.len, state.response.data.raw)
         } else {
             wprintw(windows.body, "%s\n".raw, net.ErrorToString(code).raw)
         }
 
-        EnableComponentColor(windows.bodyToggle, ComponentColor.Tab)
-        mvwprintw(windows.bodyToggle, 0, (state.width/2)+10, "(json, %dms, status: %d)   ".raw, cast(i32)(time*1000), status)
-        DisableComponentColor(windows.bodyToggle, ComponentColor.Tab)
+        state.hasResponse = true
+        state.response.contentType = "json"
+        state.response.time = time
+        state.response.status = status
+        PrintResponseTab(windows, state)
 
         touchwin(windows.main)
         wrefresh(windows.body)
@@ -193,8 +252,6 @@ main :: fn() -> i32 {
     mvwprintw(sub, 0, 0, "   GET   ".raw)
     DisableComponentColor(sub, ComponentColor.Get)
 
-    wprintw(url, " %s".raw, URL.raw)
-
     EnableComponentColor(toggle, ComponentColor.Tabbar)
     mvwprintw(toggle, 0, 1, "Request".raw)
     DisableComponentColor(toggle, ComponentColor.Tab)
@@ -217,12 +274,16 @@ main :: fn() -> i32 {
         height: h,
         mode: Mode.Normal,
         running: true,
-        responseData: &data
+        hasResponse: false
     }
     state := &_state
+    state.response.data = &data
 
     _windows := Windows {
         main: win,
+        header: header,
+        url: url,
+        tabbar: tabbar,
         body: content,
         bodyToggle: toggle
     }
@@ -230,6 +291,8 @@ main :: fn() -> i32 {
 
     _input: Input
     input := &_input
+
+    PrintUrl(windows, URL)
 
     for state.running {
         key := curses.wgetch(win)
@@ -244,7 +307,12 @@ main :: fn() -> i32 {
             }
         } else if key == curses.KEY_RESIZE {
             state.height, state.width = getmaxyx(stdscr)
-            // TODO(Brett): relayout
+            RelayoutWindows(windows, state.width, state.height)
+            PrintUrl(windows, URL)
+            FillLine(windows.tabbar, ComponentColor.Tabbar, state.width)
+            FillLine(windows.bodyToggle, ComponentColor.Tabbar, state.width/2)
+            PrintResponseTab(windows, state)
+            RefreshAll(windows)
             continue
         }
 

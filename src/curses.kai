@@ -42,6 +42,7 @@
     wclear    :: (win: rawptr) -> i32
     wclrtoeol :: (win: rawptr) -> i32
     wmove     :: (win: rawptr, y, x: u32) -> i32
+    wresize   :: (win: rawptr, lines, cols: i32) -> i32
     touchwin  :: (win: rawptr) -> i32
 
     mousemask :: (new: u32, old: *u32) -> i32
