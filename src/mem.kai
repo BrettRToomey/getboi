@@ -42,7 +42,7 @@ heapAllocFunc :: fn(payload: rawptr, type: AllocType, size, oldsize: u64, old: r
 // Maps a file to an address through the kernel.
 ReadFile :: fn(path: string) -> []u8, bool {
     using libc
-    file := open(path.raw, O_RDONLY)
+    file := open(path.raw, OpenOptions.RDONLY)
     if file == -1 { return []u8{}, false }
     defer close(file)
     
@@ -51,7 +51,7 @@ ReadFile :: fn(path: string) -> []u8, bool {
         return []u8{}, false
 
     len := stat.size
-    addr := mmap(nil, len, PROT_READ, MAP_PRIVATE, file, 0)
+    addr := mmap(nil, len, Prot.READ, Map.PRIVATE, file, 0)
     if cast(i64)addr < 0
         return []u8{}, false
 
