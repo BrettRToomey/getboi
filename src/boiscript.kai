@@ -1,3 +1,181 @@
-Parse :: fn(data: []u8) -> void {
+#import "strings.kai"
+#import "libc.kai"
 
+VarType :: enum(u8) {
+    Global
+    Local
+}
+
+SourceType :: enum(u8) {
+    Json
+}
+
+Stmt :: struct {
+    type: VarType
+    sourceType: SourceType
+    lhs, rhs: string
+}
+
+Parse :: fn(data: []u8, stmts: *[]Stmt) -> bool {
+    if !stmts
+        return false
+
+    if data.len == 0
+        return true
+
+    for i : i64 = 0; i < cast(i64)data.len; i += 1 {
+        n0 := nextToken(data[i:])
+        if n0 == -1
+            break
+
+        i += n0
+
+        stmt, offset := ParseStmt(data[i:])
+        if offset == -1 {
+            return false
+        }
+
+        i += offset
+
+        (<stmts)[stmts.len] = stmt
+        stmts.len += 1
+        if stmts.len == stmts.cap { // not enough space to store all results
+            break
+        }
+    }
+
+    return true
+}
+
+ParseStmt :: fn(data: []u8) -> Stmt, i64 {
+    if data.len == 0 {
+        return Stmt{}, 0
+    }
+
+    offset : i64 = 0
+    ident, idx := ParseIdent(data)
+    if idx == -1 {
+        return Stmt{}, -1
+    }
+
+    offset += idx
+
+    type := VarType.Local
+    if strings.HasPrefix(ident, "global.") {
+        type = VarType.Global
+        ident = ident[7:] // strip "global."
+    }
+
+    idx = ExpectEqual(data[offset:])
+    if idx == -1 {
+        return Stmt{}, -1
+    }
+
+    offset += idx
+
+    source, sdx := ParseIdent(data[offset:])
+    if sdx == -1 {
+        return Stmt{}, -1
+    }
+
+    offset += sdx
+
+    sourceType: SourceType
+    if strings.HasPrefix(source, "json.") {
+        sourceType = SourceType.Json
+        source = source[5:] // strip "json."
+    }
+
+    return Stmt {type, sourceType, ident, source }, offset+1
+}
+
+ParseIdent :: fn(data: []u8) -> []u8, i64 {
+    start := nextToken(data)
+    if start == -1 {
+        return []u8{}, -1
+    }
+
+    current := start
+    for current < cast(i64)data.len {
+        c := data[current]
+        if !strings.IsAlpha(c) && !strings.IsNumeric(c) && c != "." {
+            break
+        }
+        
+        current += 1
+    }
+
+    return data[start:current], current+1
+}
+
+ExpectEqual :: fn(data: []u8) -> i64 {
+    index := nextToken(data)
+    if index == -1 || data[index] != "="
+        return -1
+
+    return index + 1
+}
+
+nextToken :: fn(data: []u8) -> i64 {
+    for i := 0; i < data.len; i += 1 {
+        switch data[i] {
+        case " ", "\n", "\r", "\t":
+            continue
+        case:
+            return i
+        }
+    }
+
+    return -1
+}
+
+#test "BoiScript: can parse ident" {
+    ident, idx := ParseIdent("global ")
+    assert(idx == 7)
+    assert(strings.Equal(ident, "global"))
+}
+
+#test "BoiScript: can parse ident with ." {
+    ident, idx := ParseIdent("a.valid.ident = a ")
+    assert(idx == 14)
+    assert(strings.Equal(ident, "a.valid.ident"))
+}
+
+#test "BoiScript: can parse stmt" {
+    stmt, idx := ParseStmt("abc = json.test.value")
+    assert(idx != -1)
+    assert(strings.Equal(stmt.lhs, "abc"))
+    assert(strings.Equal(stmt.rhs, "test.value"))
+    assert(stmt.type == VarType.Local)
+    assert(stmt.sourceType == SourceType.Json)
+}
+
+#test "BoiScript: can parse stmt with whitespace" {
+    stmt, idx := ParseStmt("  abc   =   json.test.value")
+    assert(idx == 29)
+    assert(strings.Equal(stmt.lhs, "abc"))
+    assert(strings.Equal(stmt.rhs, "test.value"))
+    assert(stmt.type == VarType.Local)
+    assert(stmt.sourceType == SourceType.Json)
+}
+
+#test "BoiScript: can't parse invalid stmt" {
+    stmt, idx := ParseStmt("abc = ")
+    assert(idx == -1)
+}
+
+#test "BoiScript: parse stmts" {
+    stmts := []Stmt{{}, {}, {}}
+    stmts.len = 0
+    ok := Parse("global.abc = json.another.test", &stmts)
+    assert(ok)
+    assert(stmts.len == 1)
+
+    stmt := stmts[0]
+
+    assert(stmt.type == VarType.Global)
+    assert(strings.Equal(stmt.lhs, "abc"))
+
+    assert(stmt.sourceType == SourceType.Json)
+    assert(strings.Equal(stmt.rhs, "another.test"))    
 }

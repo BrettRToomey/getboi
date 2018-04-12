@@ -1,3 +1,15 @@
+HasPrefix :: fn(str, prefix: string) -> bool {
+    if prefix.len > str.len
+        return false
+
+    for c, i in prefix {
+        if c != str[i]
+            return false
+    }
+
+    return true
+}
+
 Equal :: fn(lhs, rhs: string) -> bool {
     if lhs.len != rhs.len
         return false
@@ -8,4 +20,12 @@ Equal :: fn(lhs, rhs: string) -> bool {
     }
 
     return true
+}
+
+IsAlpha :: fn(cp: u8) -> bool {
+    return (cp >= "a" && cp <= "z") || (cp >= "A" && cp <= "z")
+}
+
+IsNumeric :: fn(cp: u8) -> bool {
+    return cp >= "0" && cp <= "9"
 }
