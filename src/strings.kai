@@ -1,0 +1,11 @@
+Equal :: fn(lhs, rhs: string) -> bool {
+    if lhs.len != rhs.len
+        return false
+
+    for c, i in lhs {
+        if c != rhs[i]
+            return false
+    }
+
+    return true
+}

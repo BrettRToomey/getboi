@@ -1,6 +1,8 @@
 #import "net.kai"
 #import "mem.kai"
 #import "curses.kai"
+#import "json.kai"
+#import "boiscript.kai"
 
 ComponentColor :: enum(u16) {
     Default :: 1

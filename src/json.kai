@@ -1,0 +1,486 @@
+/* 
+    A port of the beautiful burger/jsonparser (https://github.com/buger/jsonparser/)
+*/
+
+#import "strings.kai"
+
+Type :: enum {
+    None
+    String
+    Number
+    Object
+    Array
+    Boolean
+    Null
+    Unknown
+}
+
+Error :: enum {
+    None
+    UnknownType
+    KeyNotFound
+    MalformedJson
+    MalformedString
+    MalformedArray
+    MalformedObject
+    MalformedValue
+    WrongValueType
+}
+
+findKeyStart :: fn(data: []u8, key: string) -> i64, Error {
+    i : i64 = 0
+    len := cast(i64)data.len
+
+    if len > 0 && (data[0] == "{" || data[0] == "[")
+        i = 1
+
+    // TODO(Brett): escaping
+
+    for i < len {
+        switch data[i] {
+        case "\"":
+            i += 1
+            keyBegin := i
+
+            strEnd, keyEscaped := stringEnd(data[i:])
+            if strEnd == -1 {
+                break
+            }
+
+            i += strEnd
+            keyEnd := i - 1
+
+            valueOffset := nextToken(data[i:])
+            if valueOffset == -1 {
+                break
+            }
+
+            i += valueOffset
+
+            k := data[keyBegin:keyEnd]
+
+            if keyEscaped {
+                // TODO(Brett): escaping
+            }
+
+            if data[i] == ":" && strings.Equal(k, key) {
+                return keyBegin - 1, Error.None
+            }
+        case "{", "[":
+            i = blockEnd(data[i:], data[i], data[i]) + i
+        }
+
+        i += 1
+    }
+
+    return -1, Error.KeyNotFound
+}
+
+nextToken :: fn(data: []u8) -> i64 {
+    for i := 0; i < data.len; i += 1{
+        switch data[i] {
+        case " ", "\n", "\r", "\t":
+            continue
+        case:
+            return i
+        }
+    }
+
+    return -1
+}
+
+tokenEnd :: fn(data: []u8) -> i64 {
+    for c, i in data {
+        switch c {
+        case " ", "\n", "\r", "\t", ",", "}", "]":
+            return i
+        }
+    }
+
+    return cast(i64)data.len
+}
+
+// Tries to find the end of string
+// Support if string contains escaped quote symbols.
+stringEnd :: fn(data: []u8) -> i64, bool {
+    escaped := false
+
+    for c, i in data {
+        if c == "\"" {
+            if !escaped {
+                return i + 1, false
+            } else {
+                j := i - 1
+                for {
+                    if j < 0 || data[j] != "\\" {
+                        return i + 1, true
+                    }
+                    j -= 1
+                    if j < 0 || data[j] != "\\" {
+                        break
+                    }
+                    j -= 1
+                }
+            }
+        } else if c == "\\" {
+            escaped = true
+        }
+    }
+
+    return -1, escaped
+}
+
+blockEnd :: fn(data: []u8, open, close: u8) -> i64 {
+    level := 0
+    i : i64 = 0
+    len := cast(i64)data.len
+
+    for i < len {
+        if data[i] == "\"" {
+            se, _ := stringEnd(data[i+1:])
+            if se == -1 {
+                return -1
+            }
+            i += se
+        } else if data[i] ==  open {
+            level += 1
+        } else if data[i] == close {
+            level -= 1
+            if level == 0 {
+                return i + 1
+            }
+        }
+        i += 1
+    }
+
+    return -1
+}
+
+searchKeys :: fn(data: []u8, keys: ..string) -> i64 {
+    keyLevel := 0
+    level := 0
+    i : i64 = 0
+    len := cast(i64)data.len
+    keyCount := cast(i64)keys.len
+
+    if keyCount == 0
+        return 0
+
+    for i < len {
+        switch data[i] {
+        case "\"":
+            i += 1
+            keyBegin := i
+
+            strEnd, keyEscaped := stringEnd(data[i:])
+            if strEnd == -1 {
+                return -1
+            }
+            i += strEnd
+            keyEnd := i - 1
+
+            valueOffset := nextToken(data[i:])
+            if valueOffset == -1
+                return -1
+
+            i += valueOffset
+
+            if data[i] == ":" && keyLevel == level-1 {
+                key := data[keyBegin:keyEnd]
+                // TODO(Brett): escape
+                keyUnesc: []u8
+                if !keyEscaped {
+                    keyUnesc = key
+                } else {
+                    return -1
+                }
+
+                if strings.Equal(keyUnesc, keys[level-1]) {
+                    keyLevel += 1
+                    if keyLevel == keyCount {
+                        return i+1
+                    }
+                }
+            } else {
+                i -= 1
+            }
+        case "{":
+            level += 1
+        case "}":
+            level -= 1
+            if level == keyLevel {
+                keyLevel -= 1
+            }
+        }
+
+        i += 1
+    }
+
+    return -1
+}
+
+getType :: fn(data: []u8, offset: i64) -> []u8, Type, i64, Error {
+    type: Type
+    endOffset := offset
+
+    if data[offset] == "\"" {
+        type = Type.String
+        idx, _ := stringEnd(data[offset+1:])
+        if idx == -1 {
+            return []u8{}, type, offset, Error.MalformedString
+        }
+
+        endOffset += idx + 1
+    } else if data[offset] == "[" {
+        type = Type.Array
+        endOffset = blockEnd(data[offset:], "[", "]")
+        if endOffset == -1 {
+            return []u8{}, type, offset, Error.MalformedArray
+        }
+
+        endOffset += offset
+    } else if data[offset] == "{" {
+        type = Type.Object
+        endOffset = blockEnd(data[offset:], "{", "}")
+        if endOffset == -1 {
+            return []u8{}, type, offset, Error.MalformedObject
+        }
+
+        endOffset += offset
+    } else {
+        end := tokenEnd(data[endOffset:])
+        if end == -1 {
+            return []u8{}, type, offset, Error.MalformedValue
+        }
+
+        value := data[offset:endOffset+end]
+        switch data[offset] {
+        case "t", "f":
+            if strings.Equal(value, "true") || strings.Equal(value, "false") {
+                type = Type.Boolean
+            } else {
+                return []u8{}, Type.Unknown, offset, Error.UnknownType
+            }
+        case "u", "n":
+            if strings.Equal(value, "null") {
+                type = Type.Null
+            } else {
+                return []u8{}, Type.Unknown, offset, Error.UnknownType
+            }
+        case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-":
+            type = Type.Number
+        case:
+            return []u8{}, Type.Unknown, offset, Error.UnknownType
+        }
+
+        endOffset += end
+    }
+
+    return data[offset:endOffset], type, endOffset, Error.None
+}
+
+Get :: fn(data: []u8, keys: ..string) -> []u8, Type, i64, Error {
+    a, b, _, d, e := internalGet(data, ..keys)
+    return a, b, d, e
+}
+
+internalGet :: fn(data: []u8, keys: ..string) -> []u8, Type, i64, i64, Error {
+    offset : i64 = 0
+    if keys.len > 0 {
+        offset = searchKeys(data, ..keys)
+        if offset == -1 {
+            return []u8{}, Type.None, -1, -1, Error.KeyNotFound
+        }
+    }
+
+    n0 := nextToken(data[offset:])
+    if n0 == -1 {
+        return []u8{}, Type.None, offset, -1, Error.MalformedJson
+    }
+
+    offset += n0
+    value, type, endOffset, err := getType(data, offset)
+    if err != Error.None {
+        return value, type, offset, endOffset, err
+    }
+
+    if type == Type.String {
+        value = value[1:value.len-1]
+    }
+
+    return value, type, offset, endOffset, Error.None
+}
+
+ArrayEach :: fn(data: []u8, userdata: rawptr, cb: ((data: []u8, type: Type, offset: i64, userdata: rawptr, error: *Error) -> void), keys: ..string) -> i64, Error {
+    if data.len == 0 {
+        return -1, Error.MalformedObject
+    }
+
+    offset: i64 = 1
+
+    if keys.len > 0 {
+        offset = searchKeys(data, ..keys)
+        if offset == -1 {
+            return offset, Error.KeyNotFound
+        }
+
+        n0 := nextToken(data[offset:])
+        if n0 == -1 {
+            return offset, Error.MalformedJson
+        }
+
+        offset += n0
+
+        if data[offset] != "[" {
+            return offset, Error.MalformedArray
+        }
+
+        offset += 1
+    }
+
+    n0 := nextToken(data[offset:])
+    if n0 == -1 {
+        return offset, Error.MalformedJson
+    }
+
+    offset += n0
+
+    if data[offset] == "]" {
+        return offset, Error.None
+    }
+
+    for {
+        v, t, o, e := Get(data[offset:])
+        if e != Error.None {
+            return offset, e
+        }
+
+        if o == 0 {
+            break
+        }
+
+        if t != Type.None {
+            cb(v, t, offset+o-cast(i64)v.len, userdata, &e)
+        }
+
+        // user callback changed the error
+        if e != Error.None {
+            break
+        }
+
+        offset += o
+
+        skipToToken := nextToken(data[offset:])
+        if skipToToken == -1 {
+            return offset, Error.MalformedArray
+        }
+
+        offset += skipToToken
+
+        if data[offset] == "]" {
+            break
+        }
+
+        if data[offset] != "," {
+            return offset, Error.MalformedArray
+        }
+
+        offset += 1
+    }
+
+    return offset, Error.None
+}
+
+GetUnescapedString :: fn(data: []u8, keys: ..string) -> string, Error {
+    v, t, _, e := Get(data, ..keys)
+
+    if e != Error.None {
+        return "", e
+    }
+
+    return v, Error.None
+}
+
+GetString :: fn(data: []u8, keys: ..string) -> string, Error {
+    v, t, _, e := Get(data, ..keys)
+
+    if e != Error.None {
+        return "", e
+    }
+
+    if t != Type.String {
+        return "", Error.WrongValueType
+    }
+
+    // TODO(Brett): escapes
+    return v, Error.None
+}
+
+#test "stringEnd: Can find string's end" {
+    i, escaped := stringEnd("Brett\": 3.14159")
+    assert(!escaped)
+    assert(i == 6)
+}
+
+#test "blockEnd: Can find block end []" {
+    i := blockEnd("[abcdef]", "[", "]")
+    assert(i == 8)
+}
+
+#test "blockEnd: Can find block end {}" {
+    i := blockEnd("{abc}", "{", "}")
+    assert(i == 5)
+}
+
+#test "blockEnd: Can find block end ignoring strings" {
+    i := blockEnd("{abc\"this is a test\"}", "{", "}")
+    assert(i == 21)
+}
+
+#test "blockEnd: Can't find block with unterminated string" {
+    i := blockEnd("{abc\"this is a test}", "{", "}")
+    assert(i == -1)
+}
+
+#test "searchKeys: No keys returns 0" {
+    i := searchKeys("\"key\": 10")
+    assert(i == 0)
+}
+
+#test "searchKeys: Can't find key" {
+    i := searchKeys("{\"key\": 10}", "Key")
+    assert(i == -1)
+}
+
+#test "searchKeys: Can find key" {
+    i := searchKeys("{\"key\": 10}", "key")
+    assert(i == 7)
+}
+
+#test "json: Can get string out of object" {
+    bytes, type, offset, err := Get("{\"name\": \"Brett\"}", "name")
+
+    assert(strings.Equal(bytes, "Brett"))
+    assert(type == Type.String)
+    assert(offset == 16)
+    assert(err == Error.None)
+}
+
+#test "json: Can get number out of object" {
+    bytes, type, offset, err := Get("{\"age\": 24 }", "age")
+
+    assert(strings.Equal(bytes, "24"))
+    assert(type == Type.Number)
+    assert(offset == 10)
+    assert(err == Error.None)
+}
+
+#test "json: Can get number out of object after other keys" {
+    bytes, type, offset, err := Get("{\"verified\", true, \"email\": \"test@test.com\", \"age\": 24 }", "age")
+
+    assert(strings.Equal(bytes, "24"))
+    assert(type == Type.Number)
+    assert(offset == 54)
+    assert(err == Error.None)
+
+}

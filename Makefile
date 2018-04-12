@@ -13,6 +13,7 @@ debug: app
 release: app
 
 test:
-	$(CC) -test src/main.kai
+	$(CC) -test -o all src/main.kai 
+	./test_all
 
-.PHONY: all app debug release
+.PHONY: all test app debug release
