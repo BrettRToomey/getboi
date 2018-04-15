@@ -80,7 +80,12 @@ State :: struct {
     mode: Mode
     running,
     hasResponse: bool
+    request: Request
     response: Response
+}
+
+Request :: struct {
+    url: string
 }
 
 Response :: struct {
@@ -162,10 +167,19 @@ TickNormalMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
     case "q":
         state.running = false
     case KEY_MOUSE:
-        if input.mouseClicked {
-            wprintw(windows.body, "%d, %d\n".raw, input.mouseX, input.mouseY)
-            wrefresh(windows.body)
+        if !input.mouseClicked {
+            break
         }
+
+        if input.mouseX >= 11 && (input.mouseY >= 1 && input.mouseY <= 3) {
+            state.mode = Mode.UrlInput
+            curs_set(TRUE)
+            wmove(windows.main, 2, cast(u32)input.mouseX)
+        }
+
+        wprintw(windows.body, "%d, %d\n".raw, input.mouseX, input.mouseY)
+        wrefresh(windows.body)
+
     case KEY_ENTER:
         state.response.data.len = 0
         assert(state.response.data != nil)
@@ -188,6 +202,23 @@ TickNormalMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
         touchwin(windows.main)
         wrefresh(windows.body)
         wrefresh(windows.bodyToggle)
+    }
+}
+
+TickUrlInputMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
+    using curses
+    switch input.key {
+    case KEY_MOUSE:
+        if !input.mouseClicked {
+            break
+        }
+
+        if input.mouseX < 11 || (input.mouseY < 1 || input.mouseY > 3) {
+            state.mode = Mode.Normal
+            curs_set(FALSE)
+        } else {
+            wmove(windows.main, 2, cast(u32)input.mouseX)
+        }
     }
 }
 
@@ -320,6 +351,7 @@ main :: fn() -> i32 {
 
         switch using state.mode {
         case Normal: TickNormalMode(state, windows, input)
+        case UrlInput: TickUrlInputMode(state, windows, input)
         case: /* unhandled */ state.running = false
         }
     }

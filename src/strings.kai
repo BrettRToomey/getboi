@@ -1,3 +1,5 @@
+#import "libc.kai"
+
 HasPrefix :: fn(str, prefix: string) -> bool {
     if prefix.len > str.len
         return false
@@ -23,9 +25,45 @@ Equal :: fn(lhs, rhs: string) -> bool {
 }
 
 IsAlpha :: fn(cp: u8) -> bool {
-    return (cp >= "a" && cp <= "z") || (cp >= "A" && cp <= "z")
+    return (cp >= "a" && cp <= "z") || (cp >= "A" && cp <= "Z")
 }
 
 IsNumeric :: fn(cp: u8) -> bool {
     return cp >= "0" && cp <= "9"
 }
+
+Split :: fn(str: string, delim: u8, results: *[]string) -> u64 {
+    if !results || results.cap == 0 { return 0 }
+
+    start := 0
+    index := 0
+    for i := 0; i < str.len; i += 1 {
+        if str[i] == delim {
+            (<results)[index] = str[start:i]
+            index += 1
+            start = i+1
+            if index >= results.cap {
+                break
+            }
+        }
+    }
+
+    if index < results.cap && str[str.len] != delim {
+        (<results)[index] = str[start:str.len]
+        index += 1
+    }
+
+    return index
+}
+
+#test "Can split string" {
+    buffer: [10]string
+    count := Split("a.test.case", ".", &buffer[:])
+
+    assert(count == 3)
+    assert(Equal(buffer[0], "a"))
+    assert(Equal(buffer[1], "test"))
+    assert(Equal(buffer[2], "case"))
+}
+
+
