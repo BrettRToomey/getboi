@@ -53,17 +53,18 @@ Split :: fn(str: string, delim: u8, results: *[]string) -> u64 {
         index += 1
     }
 
+    results.len = index
     return index
 }
 
 #test "Can split string" {
     buffer: [10]string
-    count := Split("a.test.case", ".", &buffer[:])
+    slice := buffer[:]
+    count := Split("a.test.case", ".", &slice)
 
     assert(count == 3)
+    assert(slice.len == 3)
     assert(Equal(buffer[0], "a"))
     assert(Equal(buffer[1], "test"))
     assert(Equal(buffer[2], "case"))
 }
-
-

@@ -1,0 +1,13 @@
+#import "libc.kai"
+#import "curses.kai"
+
+Assert :: fn(cond: bool, msg, file: string, line: u64) -> void {
+    if !cond {
+        curses.endwin()
+        libc.signal(6, nil)
+        libc.printf("Assertion failure: %s:%ld: %s\n".raw, file.raw, line, msg.raw)
+        // FIXME(Brett): probably not portable
+        libc.fflush(libc.__stdoutp)
+        libc.raise(6)
+    }
+}

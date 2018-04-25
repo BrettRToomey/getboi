@@ -3,6 +3,8 @@
 #import "curses.kai"
 #import "json.kai"
 #import "boiscript.kai"
+#import "libc.kai"
+#import "debug.kai" _
 
 ComponentColor :: enum(u16) {
     Default :: 1
@@ -140,13 +142,22 @@ PrintResponseTab :: fn(windows: *Windows, state: *State) -> void {
             windows.bodyToggle,
             0, 
             (state.width/2)+1, 
-            "Response (%s, %dms, status: %d)".raw,
+            "한Response (%s, %dms, status: %d)".raw,
             contentType.raw, 
             time,
             status)
     } else {
         curses.mvwprintw(windows.bodyToggle, 0, (state.width/2)+1, "Response".raw)
     }
+}
+
+PrintLineNumbers :: fn(windows: *Windows, start, end: i32) -> void {
+    // TODO(Brett): this is all wrong. Just moved here so I don't forget it later
+    EnableComponentColor(windows.main, ComponentColor.LineNum)
+    for i := start; i < end; i += 1 {
+        curses.mvwprintw(windows.main, i+5, 0, "%*d".raw, 2, i+1)
+    }
+    DisableComponentColor(windows.main, ComponentColor.LineNum)
 }
 
 RefreshAll :: fn(windows: *Windows) -> void {
@@ -202,6 +213,9 @@ TickNormalMode :: fn(state: *State, windows: *Windows, input: *Input) -> void {
         touchwin(windows.main)
         wrefresh(windows.body)
         wrefresh(windows.bodyToggle)
+    case:
+        wprintw(windows.body, "%lc".raw, input.key)
+        wrefresh(windows.body)
     }
 }
 
@@ -235,6 +249,9 @@ main :: fn() -> i32 {
 
     // TODO(Brett): remove UI code from here and this using stmt
     using curses
+
+    // NOTE: required for widechar support
+    libc.setlocale(libc.LC_ALL, "".raw);
 
     initscr()
     noecho()
@@ -273,9 +290,9 @@ main :: fn() -> i32 {
     box(header, 0, 0)
 
     FillLine(tabbar, ComponentColor.Tabbar, w)
-    FillLine(toggle, ComponentColor.Tabbar, w/2)
+    FillLine(toggle, ComponentColor.Tab, w/2)
     // NOTE: the plus one is to properly size on odd screen widths
-    FillLineOffset(toggle, ComponentColor.Tab, w/2+1, w/2)
+    FillLineOffset(toggle, ComponentColor.Tabbar, w/2+1, w/2)
 
     EnableComponentColor(tabbar, ComponentColor.Tab)
     mvwprintw(tabbar, 0, 0, " An example request ".raw)
@@ -285,20 +302,30 @@ main :: fn() -> i32 {
     mvwprintw(sub, 0, 0, "   GET   ".raw)
     DisableComponentColor(sub, ComponentColor.Get)
 
-    EnableComponentColor(toggle, ComponentColor.Tabbar)
+    EnableComponentColor(toggle, ComponentColor.Tab)
     mvwprintw(toggle, 0, 1, "Request".raw)
     DisableComponentColor(toggle, ComponentColor.Tab)
 
-    EnableComponentColor(toggle, ComponentColor.Tab)
+    EnableComponentColor(toggle, ComponentColor.Tabbar)
     mvwprintw(toggle, 0, (w/2)+1, "Response".raw)
-    DisableComponentColor(toggle, ComponentColor.Tab)
+    DisableComponentColor(toggle, ComponentColor.Tabbar)
 
-    EnableComponentColor(win, ComponentColor.LineNum)
-    for i := 0; i < (h-6); i += 1 {
-        mvwprintw(win, i+5, 0, "%*d".raw, 2, i+1)
+    { // Response tab
+        toggle := subwin(win, 1, 0, HeaderOffset+HeaderHeight+2, 0)
+        FillLine(toggle, ComponentColor.Tab, w/3)
+        FillLineOffset(toggle, ComponentColor.Tabbar, (w/3)*2+2, w/3)
+        EnableComponentColor(toggle, ComponentColor.Tab)
+        mvwprintw(toggle, 0, 1, "Body".raw)
+        DisableComponentColor(toggle, ComponentColor.Tab)
+
+        EnableComponentColor(toggle, ComponentColor.Tabbar)
+        mvwprintw(toggle, 0, (w/3)+1, "Headers".raw)
+        mvwprintw(toggle, 0, (w/3)*2, "| Script".raw)
+        DisableComponentColor(toggle, ComponentColor.Tabbar)
+
     }
-    DisableComponentColor(win, ComponentColor.LineNum)
 
+    
     curs_set(FALSE)
 
     _state := State { 
@@ -328,7 +355,8 @@ main :: fn() -> i32 {
     PrintUrl(windows, URL)
 
     for state.running {
-        key := curses.wgetch(win)
+        key: i32
+        curses.wget_wch(win, &key)
         input.key = key
         input.mouseClicked = false
 

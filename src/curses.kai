@@ -32,6 +32,7 @@
     getch    :: () -> u32
     wgetch   :: (win: rawptr) -> i32
     wrefresh :: (win: rawptr) -> i32
+    wget_wch :: (win: rawptr, char: *i32) -> i32
     wattron  :: (win: rawptr, attr: i32) -> i32
     wattroff :: (win: rawptr, attr: i32) -> i32
     nodelay  :: (win: rawptr, cond: i32) -> i32
