@@ -1,3 +1,5 @@
+#import "mem.kai"
+
 InvalidCodePoint :: 0xFFFD
 
 FIRST_LEN :: [0x100]u64{
@@ -35,34 +37,55 @@ Decode :: fn(str: []u8) -> u32, u64 {
     return val, len
 }
 
-Encode :: fn(buffer: []u8, cp: u32) -> u32 {
+Encode :: fn(buffer: []u8, cp: u32) -> u64 {
     if (cp <= 0x7F) {
-        buffer[0] = cast(u8)cp;
-        return 1;
+        buffer[0] = cast(u8)cp
+        return 1
     }
 
     if (cp <= 0x7FF) {
-        buffer[0] = 0xC0 | cast(u8)(cp >> 6);
-        buffer[1] = 0x80 | cast(u8)(cp & 0x3F);
-        return 2;
+        buffer[0] = 0xC0 | cast(u8)(cp >> 6)
+        buffer[1] = 0x80 | cast(u8)(cp & 0x3F)
+        return 2
     }
 
     if (cp <= 0xFFFF) {
-        buffer[0] = 0xE0 | cast(u8)(cp >> 12);
-        buffer[1] = 0x80 | cast(u8)((cp >> 6) & 0x3F);
-        buffer[2] = 0x80 | cast(u8)(cp & 0x3F);
-        return 3;
+        buffer[0] = 0xE0 | cast(u8)(cp >> 12)
+        buffer[1] = 0x80 | cast(u8)((cp >> 6) & 0x3F)
+        buffer[2] = 0x80 | cast(u8)(cp & 0x3F)
+        return 3
     }
 
     if (cp <= 0x10FFFF) {
-        buffer[0] = 0xF0 | cast(u8)(cp >> 18);
-        buffer[1] = 0x80 | cast(u8)((cp >> 12) & 0x3F);
-        buffer[2] = 0x80 | cast(u8)((cp >> 6) & 0x3F);
-        buffer[3] = 0x80 | cast(u8)(cp & 0x3F);
-        return 4;
+        buffer[0] = 0xF0 | cast(u8)(cp >> 18)
+        buffer[1] = 0x80 | cast(u8)((cp >> 12) & 0x3F)
+        buffer[2] = 0x80 | cast(u8)((cp >> 6) & 0x3F)
+        buffer[3] = 0x80 | cast(u8)(cp & 0x3F)
+        return 4
     }
 
-    return 0;
+    return 0
+}
+
+Insert :: fn(ptr: *[]u8, cp: u32, index: u64) -> u64 {
+    buffer := <ptr
+
+    encodedCp: [4]u8
+    len := Encode(encodedCp[:], cp)
+
+    newEnd := (buffer.len-1)+len
+    if newEnd >= buffer.cap
+        return 0
+
+    // move old bytes to their new spot
+    for i := buffer.len-1; i >= index; i -= 1 {
+        buffer[i+len] = buffer[i]
+    }
+
+    mem.Copy(&buffer[index], &encodedCp[0], len)
+
+    ptr.len = len
+    return len
 }
 
 #test "Can decode multi-byte (2) sequence" {

@@ -1,4 +1,5 @@
 #import "libc.kai"
+#import builtin("types") _
 
 AllocType :: enum {
     Alloc
@@ -20,6 +21,24 @@ DefaultAllocatorInit :: fn() -> Allocator {
         &heapAllocFunc,
         nil
     }
+}
+
+Copy :: fn(dst, src: rawptr, len: u64) -> rawptr {
+    if cast(u64)dst % SizeOf(rawptr) == 0 && cast(u64)src % SizeOf(rawptr) == 0 && len % SizeOf(rawptr) == 0 {
+        d : *u64 = autocast dst
+        s : *u64 = autocast src
+        for i := 0; i < len/SizeOf(rawptr); i += 1 {
+            d[i] = s[i]
+        }
+    } else {
+        d : *u8 = autocast dst
+        s : *u8 = autocast src
+        for i := 0; i < len; i += 1 {
+            d[i] = s[i]
+        }
+    }
+
+    return dst
 }
 
 heapAllocFunc :: fn(payload: rawptr, type: AllocType, size, oldsize: u64, old: rawptr) -> rawptr {
