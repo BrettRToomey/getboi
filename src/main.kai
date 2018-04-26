@@ -4,6 +4,8 @@
 #import "json.kai"
 #import "boiscript.kai"
 #import "libc.kai"
+#import "utf.kai"
+
 #import "debug.kai" _
 
 ComponentColor :: enum(u16) {
@@ -45,7 +47,7 @@ HeaderOffset :: TabbarHeight
 MethodWidth  :: 5
 MethodHeight :: 1
 
-URL :: "https://jsonplaceholder.typicode.com/users"
+URL := "https://jsonplaceholder.typicode.com/users"
 
 EnableComponentColor :: fn(win: rawptr, color: ComponentColor) -> void {
     using curses
@@ -233,6 +235,10 @@ TickUrlInputMode :: fn(state: *State, windows: *Windows, input: *Input) -> void 
         } else {
             wmove(windows.main, 2, cast(u32)input.mouseX)
         }
+    case:
+        URL[0] = "z"
+        PrintUrl(windows, URL)
+        wrefresh(windows.url)
     }
 }
 
@@ -324,7 +330,6 @@ main :: fn() -> i32 {
         DisableComponentColor(toggle, ComponentColor.Tabbar)
 
     }
-
     
     curs_set(FALSE)
 
@@ -378,7 +383,7 @@ main :: fn() -> i32 {
         }
 
         switch using state.mode {
-        case Normal: TickNormalMode(state, windows, input)
+        case Normal:   TickNormalMode(state, windows, input)
         case UrlInput: TickUrlInputMode(state, windows, input)
         case: /* unhandled */ state.running = false
         }

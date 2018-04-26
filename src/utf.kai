@@ -1,0 +1,109 @@
+InvalidCodePoint :: 0xFFFD
+
+FIRST_LEN :: [0x100]u64{
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
+    4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1
+}
+MASK :: [..]u8{ 0xFF, 0xFF, 0x1F, 0xF, 0x7 }
+
+Decode :: fn(str: []u8) -> u32, u64 {
+    if str.len == 0
+        return InvalidCodePoint, 0
+
+    b0 := str[0]
+    len := FIRST_LEN[cast(i64)b0]
+    val := cast(u32)(b0 & MASK[len])
+    
+    for i := 1; i < len; i += 1 {
+        val = (val << 6) | cast(u32)(str[i] & 0x3f)
+    }
+
+    return val, len
+}
+
+Encode :: fn(buffer: []u8, cp: u32) -> u32 {
+    if (cp <= 0x7F) {
+        buffer[0] = cast(u8)cp;
+        return 1;
+    }
+
+    if (cp <= 0x7FF) {
+        buffer[0] = 0xC0 | cast(u8)(cp >> 6);
+        buffer[1] = 0x80 | cast(u8)(cp & 0x3F);
+        return 2;
+    }
+
+    if (cp <= 0xFFFF) {
+        buffer[0] = 0xE0 | cast(u8)(cp >> 12);
+        buffer[1] = 0x80 | cast(u8)((cp >> 6) & 0x3F);
+        buffer[2] = 0x80 | cast(u8)(cp & 0x3F);
+        return 3;
+    }
+
+    if (cp <= 0x10FFFF) {
+        buffer[0] = 0xF0 | cast(u8)(cp >> 18);
+        buffer[1] = 0x80 | cast(u8)((cp >> 12) & 0x3F);
+        buffer[2] = 0x80 | cast(u8)((cp >> 6) & 0x3F);
+        buffer[3] = 0x80 | cast(u8)(cp & 0x3F);
+        return 4;
+    }
+
+    return 0;
+}
+
+#test "Can decode multi-byte (2) sequence" {
+    cp, size := Decode("Ш")
+    assert(size == 2)
+    assert(cp == 0x0428)
+}
+
+
+#test "Can decode multi-byte (3) sequence" {
+    cp, size := Decode("한")
+    assert(size == 3)
+    assert(cp == 0xD55C)
+}
+
+#test "Can decode multi-byte (4) sequence" {
+    cp, size := Decode("💃")
+    assert(size == 4)
+    assert(cp == 0x1F483)
+}
+
+#test "Can encode byte" {
+    buff: [4]u8
+    len := Encode(buff[:], "a")
+    assert(len == 1)
+}
+
+#test "Can encode multi-byte (2) sequence" {
+    buff: [4]u8
+    len := Encode(buff[:], "Ը")
+    assert(len == 2)
+}
+
+#test "Can encode multi-byte (3) sequence" {
+    buff: [4]u8
+    len := Encode(buff[:], "한")
+    assert(len == 3)
+}
+
+#test "Can encode multi-byte (4) sequence" {
+    buff: [4]u8
+    len := Encode(buff[:], "💋")
+    assert(len == 4)
+}
